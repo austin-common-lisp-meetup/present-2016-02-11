@@ -1,0 +1,540 @@
+
+* A Common Lisp Overview
+
+[[file:./lisplogo_alien_256.png]]
+
+* Common Lisp, the language
+
+[[file:CLTL2.jpg]] [[file:ansicommonlisp.jpeg]]
+
+  - standardized from several earlier Lisps
+  - http://www.lispworks.com/documentation/HyperSpec/Front/index.htm
+  - it's big
+  - 978 symbols of pure awesome
+
+* Syntax
+
+  - Lisp
+  - ...so basically pretty simple
+
+  - (function-name arg0 arg1 ...)
+  - (function-name)
+  - 'symbol
+
+* Datatypes
+
+[[file:PCL.jpg]]
+
+* Datatypes
+
+** Numbers
+
+| integers        | 123 #x12ff2d #b101010101      |
+| big integers*   | 79228162514264337593543950335 |
+| floats, doubles | 3.14 2.1d10                   |
+| ratios          | 4/3 1/2                       |
+| complex numbers | #c(3 4.0)                     |
+    * arbtrary precision integers
+
+** Characters, Strings
+
+| characters | #\Newline #\Tab #\Space #\M |
+| strings    | "hello, world"              |
+
+** Symbols
+
+| unqualified       | foo       |
+| package qualified | asdf:foo  |
+| not exported      | asdf::foo |
+| keywords          | :name     |
+
+* Datatypes
+
+** Lists
+
+   Linked `cons' cells.
+
+| list of numbers      | '(1 2 3 4)                            |
+| list of assorted     | '(:hello 4 5 world 1/2)               |
+| pairs                | '(foo . bar)                          |
+| alists               | '((foxes . 1) (hens . 20) (dogs . 3)) |
+| plists               | '(:foo 43 :bar 88)                    |
+| sets*                |                                       |
+| trees (nested lists) | '((a b (c d) e (f g h (i j k))))      |
+
+    * lists technically, but there are functions for treating them as
+      sets
+
+** Hashtables, Vectors, Arrays
+
+| hashtables  | #<HASH-TABLE :TEST EQL :COUNT 0 {100A537C13}> |
+| vectors     | #(12 22 101)                                  |
+| arrays      | #2A((1 2 3) (4 5 6) (7 8 9))                  |
+
+* Datatypes
+
+** Structures
+#+begin_src lisp
+  (defstruct point x y)           ;; POINT
+  (make-point :x 12 :y 10)        ;; #S(POINT :X 12 :Y 10)
+  (point-x #s(point :x 12 :y 10)) ;; 12
+#+end_src
+
+** Etc.
+
+ - pathnames
+ - packages
+ - classes (get to in a bit)
+
+* Generalized Accessors
+#+NAME: point-example
+#+BEGIN_SRC lisp
+  (defstruct point x y)
+
+  (let ((p (make-point :x 12 :y 10)))
+    (setf (point-x p) 33)
+    (point-x p))
+#+END_SRC
+#+RESULTS: point-exampl: 33
+#+NAME: hash-table-example
+#+BEGIN_SRC lisp
+  (let ((h (make-hash-table)))
+    (setf (gethash :dog h) "fido")
+    h)
+#+END_SRC#+RESULTS: hash-table-example
+: #<HASH-TABLE :TEST EQL :COUNT 1 {1003AE5C23}>
+#+NAME: list-example
+#+BEGIN_SRC lisp :results none
+  (let ((foo (list 1 2 3)))
+    (setf (nth 1 foo) "fido")
+    foo)
+#+END_SRC
+#+RESULTS: (1 "fido" 3)
+
+  You can define your own with the DEFSETF macro!
+
+* CLOS (Common Lisp Object System)
+
+[[file:CLOS.jpg]]
+
+* CLOS
+
+** Classes
+#+begin_src lisp
+  (defclass point ()
+    ((x :initarg :x :reader x)
+     (y :initarg :y :reader y))
+#+end_src
+
+** Generic Methods
+
+   For defining the protocol between types
+#+begin_src lisp
+  (defgeneric distance (point point))
+#+end_src
+** Methods
+
+   - for specializing the protocol on specific types
+   - multiple dispatch model e.g.
+#+begin_src lisp
+  (defmethod distance ((p point) (c circle)) ...)
+  (defmethod distance ((p point) (b banana)) ...)
+  (defmethod distance ((c circle) (tr triangle)) ...)
+#+end_src
+* CLOS
+
+** EQL specializers
+#+begin_src lisp
+  (defconstant ++origin++ (make-instance 'point :x 0 :y 0))
+
+  (defmethod distance ((p point) (o (eql ++origin++)))
+    (let ((x (point-x p))
+          (y (point-y p)))
+      (sqrt (* x x) (* y y))))
+#+end_src
+
+* CLOS
+
+** before, around and after method advice
+
+   From my ~/.sbclrc file on a Mac:
+#+BEING_SRC lisp
+(defmethod asdf:operate :after (operation (component (eql :cffi)))
+  (pushnew #p"//opt/local/lib//"
+           (symbol-value (intern "**FOREIGN-LIBRARY-DIRECTORIES**" "CFFI")))
+#+END_SRC
+
+* MOP (Meta Object Protocol)
+
+[[file:AMOP.jpg]]
+
+* MOP
+
+   Technically, not part of Common Lisp standard, but widely
+   implemented.
+
+  - Define CLOS, in CLOS
+  - Change the behavior of CLOS e.g. transparent persistence of
+    objects
+  - Build your own object system
+
+* Errors
+
+[[file:successfullisp.jpg]]
+
+* Simple Error Handling
+#+BEGIN_SRC lisp
+  ...
+  (unwind-protect
+       (use-keyboard kbd)
+    (release-keyboard kbd))
+#+END_SRC
+
+  e.g. Clean up after using a resource
+
+#+BEGIN_SRC lisp
+  (ignore-errors ...)
+#+END_SRC
+
+* Condition System
+
+** Signals
+
+   Define them like CLOS classes:
+#+BEGIN_SRC lisp
+  (define-condition device-on-fire (error)
+    ((device :initarg :name :reader device)
+     (fire-temperature :type single-float :initarg :temp :reader temp)))
+#+END_SRC
+   Raise them:
+#+BEGIN_SRC lisp
+  (error 'device-on-fire :name "keyboard" :temp 10e5)
+#+END_SRC
+   Raise them without defining an explicit condition:
+#+BEGIN_SRC lisp
+  (error "Can't read from keyboard: ~A" "fire")
+#+END_SRC
+
+* Condition System
+
+** Condition Handlers
+
+   Like a try/catch block from in lesser languages:
+#+BEGIN_SRC lisp
+  (handler-case
+      (progn
+        (use-keyboard kbd)
+        (use-keyboard kbd))
+    (device-on-fire (f)
+      (format nil "keyboard burning brightly at ~A Kelvin~%" (temp f)))
+    (error (e)
+      (format nil "unknown keyboard problem~A")))
+#+END_SRC
+
+* Condition System
+
+** Restarts
+
+   Specify an option on what to do on an error:
+#+BEGIN_SRC lisp
+  (defun use-keyboard (kbd)
+    (restart-case
+        (do-something-with-keyboard kbd)
+      (extinguish-and-retry ()
+        (:report (lambda (stream)
+                   (format stream "Try extinguishing fire and then retry"))
+                 (progn
+                   (extinguish-fire kbd)
+                   (use-keyboard kdb))))
+      (use-another-keyboard (other-kbd) ...)))
+#+END_SRC
+
+   The /caller/ get's to decide what to do on error:
+#+BEGIN_SRC lisp
+  (use-keyboard kbd)              ;; don't handle anything
+#+END_SR
+#+BEGIN_SRC lisp
+  (handler-bind (device-on-fire   ;; we should try and put the fire out
+                 (lambda (c)
+                   (invoke-restart (find-restart 'extinguish-and-retry c))
+                   ...))
+   (use-keyboard kbd))
+#+END_SRC
+
+* Condition System
+
+** Restarts Example
+#+BEGIN_SRC
+CL-USER> (cffi:load-foreign-library "example")
+
+Unable to load foreign library (EXAMPLE-684).
+  Error opening shared object "example":
+  example: cannot open shared object file: No such file or directory.
+   [Condition of type CFFI:LOAD-FOREIGN-LIBRARY-ERROR]
+
+Restarts:
+ 0: [RETRY] Try loading the foreign library again.
+ 1: [USE-VALUE] Use another library instead.
+ 2: [RETRY] Retry SLIME REPL evaluation request.
+ 3: [*ABORT] Return to SLIME's top level.
+ 4: [ABORT] abort thread (#<THREAD "repl-thread" RUNNING {1004AE0033}>)
+
+Backtrace:
+  0: (CFFI::FL-ERROR "Unable to load foreign library (~A).~%  ~A" #:EXAMPLE-684 "Error opening shared object \"example\": ..)
+  1: (CFFI::REPORT-SIMPLE-ERROR #:EXAMPLE-684 #<SIMPLE-ERROR "Error opening ~:[runtime~;shared object ~:*~S~]:~%  ~A." {10068AFCA3}>)
+  2: (CFFI::LOAD-FOREIGN-LIBRARY-PATH #:EXAMPLE-684 "example" NIL)
+  3: ((FLET CFFI::%DO-LOAD :IN CFFI::%DO-LOAD-FOREIGN-LIBRARY) #<CFFI:FOREIGN-LIBRARY EXAMPLE-684> #:EXAMPLE-684 "example")
+  4: (CFFI::%DO-LOAD-FOREIGN-LIBRARY "example" NIL)
+  5: (CFFI:LOAD-FOREIGN-LIBRARY "example" :SEARCH-PATH NIL)
+#+END_SRC
+
+* Condition System
+
+** List of awesome
+
+   - Recoverable errors with logic dictated by /caller/
+   - You can handle the error in the /context/ it was created
+   - Stack doesn't get unrolled, so you can always continue
+
+* Macros
+
+  - transform code
+[[file:onlisp.gif]]
+
+* Macros
+**
+ Key insight
+
+  - entirity of Lisp avialable at macro expansion time
+  - since the code macros operate on is also Lisp data...
+  - therefore very powerful
+* Macros
+
+** Example
+
+CL-USER> (macroexpand-all
+          '(loop
+              repeat 10
+              do (format t "I will pay attention in class~%")))
+
+(BLOCK NIL
+  (LET ((#:LOOP-REPEAT-778 (CEILING 10)))
+    (DECLARE (TYPE (MOD 11) #:LOOP-REPEAT-778))
+    (TAGBODY
+     SB-LOOP::NEXT-LOOP
+      (IF (<= #:LOOP-REPEAT-778 0)
+          (GO SB-LOOP::END-LOOP)
+          (SETQ #:LOOP-REPEAT-778 (SB-IMPL::XSUBTRACT 1 #:LOOP-REPEAT-778)))
+      (FORMAT T "I will pay attention in class~%")
+      (GO SB-LOOP::NEXT-LOOP)
+     SB-LOOP::END-LOOP)))
+T
+
+* Reader Macros
+
+Invent your own read-time syntax!
+#+BEGIN_SRC lisp
+  (let ((a 42))
+    #?"foo: \xC4\N{Latin capital letter U with diaeresis}\nbar: ${a}")
+#+END_SRC
+#+BEGIN_SRC lisp
+  (let ((*translation-file-root* "//usr/share/locale/"))
+    (load-language "foo" :locale (find-locale))
+    (print  #!"Browse"))
+#+END_SRC
+#+BEGIN_SRC lisp
+  (sql [select [foo] [bar] :from [baz]] 'having [= [foo id] [bar id]]
+       'and [foo val] '< 5)
+#+END_SRC
+#+BEGIN_SRC lisp
+  (#"getProperties" 'lang.System)
+#+END_SRC
+#+BEGIN_SRC lisp
+  <a href="http://www.agentsheets.com">AgentSheets</a>
+#+END_SRC
+#+BEGIN_SRC lisp
+  #H(:name "Eitaro Fukamachi" :project "cl21")
+#+END_SRC
+
+#+BEGIN_SRC lisp
+  #/([a-z]+_[0-4]{2))/g
+#+END_SRC
+
+* Other things
+
+** LOOP
+#+BEGIN_SRC lisp
+  (loop for x from 1
+     for y = (* x 10)
+     while (< y 100)
+     do (print (* x 5))
+     collect y)
+#+END_SRC
+
+** FORMAT
+
+   From [[http://cybertiggyr.com/fmt/fmt.pdf][Advanced Use of Lisp’s FORMAT Function]]:
+
+#+BEGIN_SRC lisp
+;; word wrap to 40 columns
+(format nil "~{~<~%~1,40:;~A~> ~}" words)
+
+;; grammar
+(format nil "I have~{ ~(~A~)~#[~;, &~:;,~]~}." '("4" "5" "six"))
+=> "I have 4, 5, & six."
+#+END_SRC
+
+* Optional type information
+
+  - Some implementations e.g. SBCL, apply type-inference
+  - Provide hints to the optimizing compiler where necessary, e.g.a
+
+#+BEGIN_SRC
+CL-USER> (defun my-fixnum-adder (a b)
+           (declare (optimize (speed 3) (safety 0)))
+           (declare (type fixnum a b))
+           (the fixnum (+ a b)))
+MY-FIXNUM-ADDER
+
+CL-USER> (disassemble 'my-fixnum-adder)
+; disassembly for MY-FIXNUM-ADDER
+; Size: 12 bytes. Origin: #x10082F5F02
+; 2:       4801F9           ADD RCX, RDI                      ; no-arg-parsing entry point
+; 5:       488BD1           MOV RDX, RCX
+; 8:       488BE5           MOV RSP, RBP
+; B:       F8               CLC
+; C:       5D               POP RBP
+; D:       C3               RET
+NIL
+#+END_SRC
+* Compiler settings
+
+  - e.g.
+#+BEGIN_SRC lisp
+  (declare (optimize (speed 3) (debug 0) (safety 0)))
+#+END_SRC
+
+* Implementations
+
+** Native Compilers
+
+   - [[http://sbcl.org/][Steel Bank Common Lisp (SBCL)]]
+   - [[http://ccl.clozure.com/][Clozure Common Lisp]]
+   - CMUCL
+
+** C/C++-targeting
+
+   - [[https://common-lisp.net/project/ecl/][Embeddedable Common Lisp (ECL)]]
+   - Clasp
+   - GCL
+
+** Bytecode
+
+   - [[https://common-lisp.net/project/armedbear/][Armed Bear Common Lisp (ABCL)]]
+   - CLISP
+
+* Implementations
+
+** JavaScript
+
+   - [[http://davazp.net/jscl/jscl.html][JSCL]]
+
+** Other
+
+   - Lispworks, Allegro...
+   - ...
+
+* Things Not in the Standard
+
+** Threads, IPC
+
+   - bordeaux-threads
+   - lparallel
+   - chanl
+
+** Sockets
+
+   - usocket
+   - iolib
+
+** HTTP clent/server, SSL, Graphics, etc...
+
+   - covered by libraries
+
+* Ecosystem
+
+** ASDF
+
+   - Another System Definition Facity
+   - ... acutally, it's the only one now
+   - like a "Makefile", but for Lisp
+
+#+BEGIN_SRC lisp
+  (defsystem example-system
+    :serial t
+    :components ((:file "packages")
+                 (:file "example")))
+
+  (asdf:oos 'asdf:load-op :example-system)
+#+END_SRC
+
+* Ecosystem
+
+** Quicklisp
+
+   - https://www.quicklisp.org
+   - >1200 open source libraries
+   - loads ASDF systems and dependencies e.g.
+
+#+BEGIN_SRC
+CL-USER> (ql:quickload "drakma")
+To load "drakma":
+  Load 1 ASDF system:
+    drakma
+; Loading "drakma"
+[package puri]....................................
+[package cl-base64]...............................
+[package impl-specific-gray]......................
+[package trivial-gray-streams]....................
+[package chunga]..................................
+...
+[package usocket].................................
+[package trivial-garbage].........................
+[package cl+ssl]..................................
+[package drakma]...........
+("drakma")
+#+END_SRC
+
+* Learning
+
+  - Practical Common Lisp (book and free on web)
+  - Land of Lisp (it has a *MUSIC VIDEO* https://www.youtube.com/watch?v=HM1Zb3xmvMc)
+  - many others...
+  - http://cliki.net (the wiki)
+  - #lisp on freenode
+  - http://quickdocs.org/
+
+* Coding
+
+  - Ideally, something that can match parentheses
+
+* Coding
+
+** Emacs
+
+   - inferior Lisp mode (send code to stdin of a Lisp process running in Emacs)
+   - SLIME
+   - SLY
+
+** Vim
+   - Slimv
+
+* Debugging
+
+   - MACROEXPAND-1
+   - TRACE
+   - BREAK
+   - STEP
+   - INSPECT
+
+* End
